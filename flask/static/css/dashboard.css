@@ -1,0 +1,22 @@
+.chart_container{
+    width: 45%;
+    float: left;
+    margin: 1%;
+    text-align: center;
+}
+
+#trending_area {
+  width: 45%;
+    float: left;
+    margin: 1%;
+    text-align: center;
+
+}
+
+#influencers_area {
+  width: 45%;
+    float: left;
+    margin: 1%;
+    text-align: center;
+
+}
