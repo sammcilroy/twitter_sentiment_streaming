@@ -332,10 +332,33 @@ the data being produced as expected:
 
 <img src="images/spark_console.png?raw=true"/>
 
+Once the running totals were confirmed to be collating successfully as expected, functionality was
+added to push the data to Flask, through API endpoints. For each RDD generated, i.e. the current sorted hashtags/tagged users every 2 seconds, the RDD was passed into the below function, taking the top 10 entries, splitting the data into 2 arrays representing the labels and counts and posted using the Python requests library to the Flask API:
 
+```python
+def trending_to_flask(rdd):
+    '''
+    For each RDD send top ten data to flask api endpoint
+    '''
+    if not rdd.isEmpty():
+        top = rdd.take(10)
 
+        labels = []
+        counts = []
 
+        for label, count in top:
+            labels.append(label)
+            counts.append(count)
+            #print(labels)
+            #print(counts)
+            request = {'label': str(labels), 'count': str(counts)}
+            response = requests.post('http://0.0.0.0:5001/update_trending', data=request)
 
+trending.pprint(10) # print the current top ten hashtags to the console
+trending.foreachRDD(trending_to_flask) # send the current top 10 hashtags rdd to flask for visualisation
+```
+As the script, and the Flask application, are running, the data can be viewed as the expected two arrays
+into the Flask API endpoint using a browser window:
 
 
 
