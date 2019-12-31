@@ -546,20 +546,62 @@ def get_messages(topicname):
 Data from running Kafka topics can then be seen populating in the browser. Below is the Kafka stream
 used to populate the sentiment map:
 
+<img src="images/sentiment_browser.png?raw=true"/>
+
+##### Chart.js Visualisations
+
+Chart.js was implemented to use JavaScript to create the running total bar charts connected to the data
+coming into the API endpoints set up in the previous section:
+
+```javascript
+var ctx = document.getElementById('trending_chart').getContext('2d');
+var trending_chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Hashtags',
+            data: [],
+            backgroundColor:' #af90ca',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        scales: {
+            yAxes: [{
+                ticks: {
+                    beginAtZero: true,
+                    callback: function(value) {if (value % 1 === 0) {return value;}}
+                }
+            }]
+        }
+    }
+});
+```
+JavaScript was used to populate arrays with the array data stored in the API endpoints and to use these
+to populate the labels and data arrays attached to the chart. This was set to repeat every 2 seconds. In
+this way the chart’s data arrays would be populated with new top 10 data each time:
+
+```javascript
+var src_data_trending= {
+    labels: [],
+    counts: []
+}
+
+setInterval(function(){
+    $.getJSON('/refresh_trending', {
+    }, function(data) {
+        src_data_trending.labels = data.Label;
+        src_data_trending.counts = data.Count;
+    });
+    trending_chart.data.labels = src_data_trending.labels;
+    trending_chart.data.datasets[0].data = src_data_trending.counts;
+    trending_chart.update();
+},2000);
+```
+Links to the chart JavaScript files were embedded into the relevant HTML pages for display in the
+browser:
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
