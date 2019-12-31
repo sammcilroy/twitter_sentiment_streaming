@@ -666,4 +666,13 @@ if (sent.valueOf() == "very positive") {
 A link to the sentiment map JavaScript file was then embedded into the an HTML page for display in
 the browser:
 
+<img src="images/sentiment_map.png?raw=true"/>
 
+Viewing the map in the browser we can see the tweets being populated as markers based on their
+position. Their colour is set based on their sentiment, ranging from dark green, light green, yellow,
+blue, to red representing very positive, positive, neutral, negative and very negative. Clicking on a
+marker displays a popup showing the sentiment and associated polarity.
+
+As points begin to build and cluster on the map it begins to create a visualisation indicating general
+positive or negative sentiment levels across London. The screenshot above shows data collecting for
+about an hour.
