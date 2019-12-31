@@ -504,10 +504,47 @@ def update_trending():
 ```
 The data could then be viewed populating in the browser against that route:
 
+<img src="images/flask_route.png?raw=true"/>
 
+Routes were then set up to give access to the data for the charts by providing routes to the global
+variables which can be then used in the JavaScript chart definitions:
 
+```python
+@app.route('/refresh_trending')
+def refresh_trending():
+	global trending
 
+	return jsonify(
+		Label=trending['labels'],
+		Count=trending['counts'])
+```
 
+as well as routes for the HTML pages/site navigation:
+
+```python
+@app.route("/hashtags.html")
+def get_hashtags_page():
+    global trending
+    
+    return render_template('hashtags.html',
+    trending=trending)
+```
+
+To produce the real-time sentiment map I also required a route set up to collect data from Apache
+Kafka topics. The below custom route uses server-sent events to collect data from any running Kafka
+topic into the specified route:
+
+```python
+@app.route('/topic/<topicname>')
+def get_messages(topicname):
+    client = get_kafka_client()
+    def events():
+        for i in client.topics[topicname].get_simple_consumer():
+            yield 'data:{0}\n\n'.format(i.value.decode())
+    return (Response(events(), mimetype="text/event-stream"))  
+```
+Data from running Kafka topics can then be seen populating in the browser. Below is the Kafka stream
+used to populate the sentiment map:
 
 
 
