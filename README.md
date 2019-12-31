@@ -418,6 +418,107 @@ tweets_coordiates.persist(StorageLevel.MEMORY_AND_DISK)
 The coordinates and sentiment are then fed into a new Apache Kafka topic which forms the real-
 time feed on the sentiment analysis London map:
 
+<img src="images/sentiment_console.png?raw=true"/>
+
+As previously, the Kafka-Python library is used to create the Kafka producer. A custom function was
+created to create the producer and send messages to the topic:
+
+```python
+'''
+  From the tweets data stream, extract for each tweet the
+  location, by the centre of the bounding box provided, 
+  and the sentiment polarity and classification
+'''
+ # reduce/map the tweet to coordinates and sentiment tuple only
+# send minimum information from the tweet to flask app
+sentiment = tweets_coordiates. \
+map(lambda (username,coordinates,
+	    tweet_text,sentiment_level):(coordinates,
+	                                 sentiment_level)).window(60*60,2)
+
+sentiment.pprint() # print tweets sentiment to the console
+sentiment.foreachRDD(lambda rdd: rdd.foreachPartition(kafka_sender))
+```
+At this stage in the implementation process the data has been shown to be successfully produced and
+consumed. The running top ten trending hashtags and tagged influential users are being produced every
+2 seconds and being successfully passed as arrays to the relevant Flask API endpoints. The sentiment
+analysis classifications and locations of each tweet are being successfully produced to an Apache Kafka
+topic.
+
+##### Front-end Visualisations
+
+For the front-end visualisation production stage, data is pushed from the the Apache Spark processes
+both directly to Flask, for the running total dataframes, and into an
+Apache Kafka topic for the real-time sentiment analysis mapping.
+
+Flask forms the basis of the web front end and data collection routes and the visualisations are
+produced using JavaScript libraries, Chart.js and Leaflet.js.
+This stage has the following general outputs:
+
+* A web based front end, built on Python’s Flask, capable of collecting and storing data and
+hosting visualisations
+* Navigation and user interface features, CSS and Bootstrap theming
+* A bar-chart visualisation, updating every 2 seconds, showing the current top ten trending topics
+from London based tweets, based on hashtags in tweet text
+* A bar-chart visualisation, updating every 2 seconds, showing the current top ten influential
+twitter users in London, based on users being tagged in London based tweet text
+* An interactive map of London, showing in real time (as tweets are produced) the location of the
+tweet marked on the map, with markers colour coded to sentiment classification. This is
+designed to build up over time and show the general sentiment levels across London areas.
+
+##### Flask Implementation
+
+The Flask web application framework was implemented to handle the server side processing of data, to
+map the request routes and to define the HTTP routes of the web front end interface and visualisations.
+The Flask app was initialised and global variables were created to hold the data pushed from Spark to
+populate the running total bar charts:
+
+```python
+from flask import Flask, jsonify, request, Response, render_template
+from pykafka import KafkaClient
+import ast
+
+def get_kafka_client():
+    return KafkaClient(hosts='localhost:9092')
+
+app = Flask(__name__)
+
+trending = {'labels': [], 'counts': []}
+influencers = {'labels': [], 'counts': []}
+```
+Flask API endpoints were defined to update data pushed from Spark in the data analytics phase. The
+global variables are populated with this data as it is pushed using the Python ast library to interact with
+the request data:
+
+```python
+@app.route('/update_trending', methods=['POST'])
+def update_trending():
+	global trending
+	if not request.form not in request.form:
+		return "error", 400
+
+	trending['labels'] = ast.literal_eval(request.form['label'])
+	trending['counts'] = ast.literal_eval(request.form['count'])
+
+	return "success", 201
+```
+The data could then be viewed populating in the browser against that route:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
