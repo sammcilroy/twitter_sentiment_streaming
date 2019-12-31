@@ -627,4 +627,43 @@ L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={
 	accessToken: 'pk.eyJ1Ijoic2FtbWNpbHJveSIsImEiOiJjazA5aTdkaTMwOGZ3M3BtcTIzbWVvd2VmIn0.eOXHT1jSc7Ut92BvnhJGJQ'
 }).addTo(mymap);
 ```
+<img src="images/london_map.png?raw=true"/>
+
+Leaflet.js allows for custom markers to be added to coordinates on the map with user defined colours
+and messages:
+
+<img src="images/leaflet_popup.png?raw=true"/>
+
+I added to the map’s script a connection to the Kafka topic API endpoint data source, as detailed
+previously, and to extract latitude, longitude, polarity and sentiment as separate variables by cleaning
+and splitting the data into arrays and indexing:
+
+```javascript
+var source = new EventSource('/topic/twitter_sentiment_stream');
+source.onmessage = function(event) {
+  obj = String(event.data);
+  var strnew = obj.replace(/[{()}]/g, '').replace(/[\[\]']+/g,'');
+  var elems = strnew.split(',');
+  var lat = elems[1];
+  var long = elems[0];
+  var pol = elems[2];
+  var sent = elems[3].trim();
+  console.log(lat + ' ' + long + ' ' + pol+ ' ' + sent);
+```
+I then added an if then else statement to populate the map with a marker at each coordinate with the
+colour and pop up text changing based on sentiment:
+
+```javascript
+if (sent.valueOf() == "very positive") {
+    var circle = L.circle([lat, long], {
+      color: '#50cc1b',
+      fillColor: '#8bde68',
+      fillOpacity: 0.5,
+      radius: 200,
+      title: "very positive"
+    }).addTo(mymap);
+```
+A link to the sentiment map JavaScript file was then embedded into the an HTML page for display in
+the browser:
+
 
