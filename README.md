@@ -360,6 +360,64 @@ trending.foreachRDD(trending_to_flask) # send the current top 10 hashtags rdd to
 As the script, and the Flask application, are running, the data can be viewed as the expected two arrays
 into the Flask API endpoint using a browser window:
 
+<img src="images/flask_endpoint.png?raw=true"/>
+
+
+##### Sentiment Analysis
+
+The sentiment analysis map will plot
+points based on the known coordinates of the user/tweet and to color code the markers based on how
+positive or negative the sentiment of the text is.
+The TextBlob Python library sentiment method returns a polarity score as a continuous value
+between -1 (very negative) and 1 (very positive). The values are derived from a NaiveBayes text
+classification algorithm trained on labeled movie reviews texts. 
+
+The TextBlob sentiment method was used create my own custom method to sort tweet text into five
+distinct categories: very positive, positive, neutral, negative and very negative. These values will
+correspond to the colouring chosen for the sentiment map. These colours will show at a glance the
+general sentiment across different areas of the city as the tweets analysed builds up over time during the
+course of 24 hours.
+
+```python
+def tweet_sentiment(text):
+  polarity = round(float(TextBlob(text).sentiment.polarity),2) # tweet text polarity score between -1, negative, and 1 positive
+  if polarity > 0.10:
+    if polarity > 0.60: # positive score cutoffs
+      return (polarity, 'very positive')
+    else:
+      return (polarity, 'positive')
+  elif polarity < -0.10: # negative score cutoffs
+    if polarity < -0.60:
+      return (polarity, 'very negative')
+    else:
+      return (polarity, 'negative')
+  else:
+    return (polarity, 'neutral')
+```
+As tweets are consumed from the Apache Kafka topic this method is immediately applied to the text as
+the Spark RDDs are created:
+
+```python
+topic = 'kafka_twitter_stream_coordinates'
+kafkaStreamCoords = KafkaUtils.createDirectStream(ssc, [topic], {
+  'bootstrap.servers': 'localhost:9092',
+  'group.id': 'twitter',
+  'fetch.message.max.bytes': '15728640',
+  'auto.offset.reset': 'largest'}) # subscribe/stream from the kafka topic
+
+tweets_coordiates = kafkaStreamCoords. \
+        map(lambda (key, value): json.loads(value)). \
+        map(lambda json_object: (json_object["user"]["screen_name"],
+	json_object["coordinates"]["coordinates"],
+	clean_text(json_object["text"]),
+	tweet_sentiment(clean_text(json_object["text"]))))
+        
+tweets_coordiates.pprint(10)
+tweets_coordiates.persist(StorageLevel.MEMORY_AND_DISK)
+```
+The coordinates and sentiment are then fed into a new Apache Kafka topic which forms the real-
+time feed on the sentiment analysis London map:
+
 
 
 
