@@ -602,6 +602,29 @@ setInterval(function(){
 Links to the chart JavaScript files were embedded into the relevant HTML pages for display in the
 browser:
 
+<img src="images/influencers_chart.png?raw=true"/>
+
+<img src="images/webpage.png?raw=true"/>
 
 
+##### London Sentiment Map, Leaflet.js
+
+JavaScript employing the Leaflet.js library was applied to the production of the London Sentiment
+Map. Leaflet.js works in conjunction with the mapbox API to display and append to open source maps
+in the browser. I set up a JavaScript/Leaflet.js script to connect to the mapbox API and display a map of
+London:
+
+
+```javascript
+var mymap = L.map('mapid').setView([51.505, -0.09], 11);
+
+L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+	attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, 
+	<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, 
+	Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+	maxZoom: 18,
+	id: 'mapbox.streets',
+	accessToken: 'pk.eyJ1Ijoic2FtbWNpbHJveSIsImEiOiJjazA5aTdkaTMwOGZ3M3BtcTIzbWVvd2VmIn0.eOXHT1jSc7Ut92BvnhJGJQ'
+}).addTo(mymap);
+```
 
