@@ -64,6 +64,8 @@ as JavaScript files so as to be referenced from code developed through Flask.
 
 #### Data Ingestion
 
+##### Twitter Streaming API and Kafka Topics Creation
+
 Two Kafka topics were created which will are used to collect and store streams from the Twitter API.
 The first topic, kafka_twitter_stream_json, collects all available tweets from the London Area as they
 occur in real time. This gives the maximum amount of data possible for analysis. The second topic,
@@ -84,22 +86,140 @@ Two important arguments in the topic creation process to note are the replicatio
 of partitions. Basically the number of partitions is how many nodes the topic is set to be distributed
 across and the replication-factor is the number of times the data is to be replicated during distribution:
 
+<img src="images/kafka_topic.png?raw=true"/>
 
+For development purposes in this project I am using a Docker container image with a single
+Kafka/Spark node setup so the partitions and replication factor are set to 1. However, when the image
+is deployed to a distributed server or cloud environment these arguments will be changed to suit.
 
-### 2. Assess assumptions on which statistical inference will be based
+##### Tweepy Connection, Pulling JSON Tweets and Producing as Kafka Messages
 
-```javascript
-if (isAwesome){
-  return true
-}
+The Tweepy python library was used to create a connection to the Twitter Streaming API using the
+required OAuth authentication and ‘listen’ to tweets to consume as they come in real time. 
+
+The Tweepy Class <i>StdOutListener()</i> is used as a listener to gather new tweets. It contains three
+key methods which can be overridden to customize the data collected: <i>on_data</i>, <i>on_error</i> and
+<i>on_limit</i>:
+
+```python
+class StdOutListener(StreamListener):
+    def on_data(self, data):
+        producer.send_messages("kafka_twitter_stream_json", data.encode('utf-8'))
+        #print (data)
+        return True
+    def on_error(self, status):
+        print (status)
+    def on_limit(self,status):
+        print ("Twitter API Rate Limit")
+        print("Waiting...")
+        time.sleep(15 * 60) # wait 15 minutes and try again
+        print("Resuming")
+        return True
 ```
+On each data event ‘on_data’ I am using the Kafka-Python library to create a producer and send the
+tweet data as a message to the required Kafka topic:
 
-### 3. Support the selection of appropriate statistical tools and techniques
+```python
+kafka = KafkaClient("localhost:9092")
+producer = SimpleProducer(kafka)
 
-<img src="images/dummy_thumbnail.jpg?raw=true"/>
+def on_data(self, data):
+        producer.send_messages("kafka_twitter_stream_json", data.encode('utf-8'))
+```
+Data is encoded as UTF-8 to ensure compatibility with non-standard tweet characters such as emojis
+and tags.
 
-### 4. Provide a basis for further data collection through surveys or experiments
+Errors can be handled using the <i>on_error</i> method, I have chosen to have errors printed to the console
+for testing and evaluation purposed but allow the production to continue. Non-critical errors which do
+not disrupt the flow of data can be overlooked to some extent during development.
 
-Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+The <i>on_limit</i> method allows for working around limits set by Twitter on their Streaming API,
+especially the non-paid for connections. There are arbitrary limits set by Twitter based on current usage
+and capacity where a limit message is sent to a listener such as Tweepy to cut off the stream. Using the
+on_limit method I have set a waiting time of 15 minutes if this should occur, at which point the stream
+can resume. This is a generally accepted wait time among other developers working with Twitter data.
+Using this method I have not had any issues with the stream being terminated due to a Twitter limit
+message.
+
+The Twitter Streaming API provides a stream of tweets in real time
+with each tweet represented as a JSON object. Aspects of the JSON can be used to ‘filter’ the stream
+based on selection criteria. Key to this project, a filter on the location information in the JSON can be
+provided in the form of a ‘bounding box’ a set of four coordinates, forming a polygon, which define an
+area. I have used four coordinates producing a large square over Central London and surrounding areas
+of the city. This was fed into the filter argument, thus listening only for tweets from that area:
+
+```python
+# Central London Boundary Box, covers main areas of the city
+london = [-0.2287, 51.4110, -0.0294, 51.5755]
+
+stream = Stream(auth, l, tweet_mode='extended')
+stream.filter(locations=london, languages=["en"])
+```
+To simplify the sentiment analysis process, I am also using the filter arguments to listen only for tweets
+marked as English language. The tweet_mode argument for the string also allows me to pull in tweet
+data with the full text of the tweet without truncation which is useful for a more accurate sentiment
+analysis.
+
+The code below summarises how the Tweepy and Kafka-Python libraries were used in collaboration
+to produce a stream of all English language tweets within a chosen area, London in this case, and
+produce those tweets as JSON formatted messages to Apache Kafka topic(s):
+
+```python
+from tweepy.streaming import StreamListener
+from tweepy import OAuthHandler
+from tweepy import Stream
+from kafka import SimpleProducer, KafkaClient
+import json
+import time
+
+# Central London Boundary Box, covers main areas of the city
+london = [-0.2287, 51.4110, -0.0294, 51.5755]
+
+class StdOutListener(StreamListener):
+    def on_data(self, data):
+        decoded = json.loads(data)
+        if decoded.get("coordinates") is not None:
+            producer.send_messages("kafka_twitter_stream_coordinates", data.encode('utf-8'))
+        #print (data)
+        return True
+    def on_error(self, status):
+        print (status)
+    def on_limit(self,status):
+        print ("Twitter API Rate Limit")
+        print("Waiting...")
+        time.sleep(15 * 60) # wait 5 minutes and try again
+        print("Resuming")
+        return True
+
+kafka = KafkaClient("localhost:9092")
+producer = SimpleProducer(kafka)
+l = StdOutListener()
+auth = OAuthHandler(consumer_key, consumer_secret)
+auth.set_access_token(access_token, access_token_secret)
+stream = Stream(auth, l, tweet_mode='extended')
+stream.filter(locations=london, languages=["en"])
+```
+Two Apache Kafka topics were created to collect and store the JSON formatted
+tweets. The Kafka ‘Console Consumer’ script was be used to consume and display the contents of
+topics in the terminal, this was useful to show the data being collected was correct:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
