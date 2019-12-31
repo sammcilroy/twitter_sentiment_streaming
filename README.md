@@ -203,13 +203,134 @@ Two Apache Kafka topics were created to collect and store the JSON formatted
 tweets. The Kafka ‘Console Consumer’ script was be used to consume and display the contents of
 topics in the terminal, this was useful to show the data being collected was correct:
 
+<img src="images/kafka_console.png?raw=true"/>
+
+At this stage, the two Apache Kafka topics are being produced to successfully, containing stream of JSON
+tweet data from the London area. These topics represent the data in real time and are the basis for the
+next stage of data processing and analysis.
+
+##### Data Processing and Analysis
+
+For the data processing and analysis stage, the tweets being produced to the two Apache Kafka topics are consumed using the Kafka-Python library and analysed in Apache Spark and TextBlob to create three outputs:
+
+* an Apache Spark DataFrame (RDD), created every 2 seconds, showing the top ten trending
+topics in London, indicated by tweet text beginning with a hashtag #. Each RDD is then sent to
+Flask.
+
+* an Apache Spark DataFrame (RDD), created every 2 seconds, showing the top ten influential
+users in London, indicated by tweet text beginning with a user tag @, indicating that the tweet
+is referencing that user. Each RDD is then sent to Flask.
+
+* an Apache Spark DataFrame (RDD), created every 2 seconds, showing tweet coordinates and
+analysed polarity and sentiment levels for every tweet processed. This is then ‘produced’, using
+Kafka-Python, to a new Apache Kafka topic which will form a real time stream of tweet
+locations and corresponding polarity and sentiment levels to be pulled and visualised by the
+Flask/Leaflet.js London sentiment map.
 
 
+##### Consuming Kafka Topics, Data Collection and Preparation
+
+The PySpark library was used to create a direct stream from the Apache Kafka topics collecting and
+storing the tweet data:
+
+```python
+from pyspark import SparkContext, SparkConf, StorageLevel
+from pyspark.streaming import StreamingContext
+from pyspark.streaming.kafka import KafkaUtils
+
+interval = 2 # pick up new tweets from the stream as they occur (every 2 seconds)
+topic = 'kafka_twitter_stream_json' # kafka topic to subscribe to, contains stream of tweets in json
+
+conf = SparkConf().setAppName("KafkaTweetStream").setMaster("local[*]")
+sc = SparkContext(conf=conf)
+sc.setLogLevel("WARN")
+ssc = StreamingContext(sc, interval)
+
+kafkaStream = KafkaUtils.createDirectStream(ssc, [topic], {
+  'bootstrap.servers': 'localhost:9092',
+  'group.id': 'twitter',
+  'fetch.message.max.bytes': '15728640',
+  'auto.offset.reset': 'largest'}) # subscribe/stream from the kafka topic
+```
+The required data fields from the JSON structure were pulled into Spark Resilient Distributed Datasets
+(RDDs) for processing. The user, location, and text data were collected:
+
+```python
+'''
+        Tweets are coming in from the Kafka topic in large json blocks, extract the username, location
+        and contents of the tweets as json objects.
+        Basic dataframe for analysis.
+'''
+tweets = kafkaStream. \
+        map(lambda (key, value): json.loads(value)). \
+        map(lambda json_object: (json_object["user"]["screen_name"],
+                bounding_box(json_object["place"]["bounding_box"]["coordinates"]),
+					clean_text(json_object["text"]), 
+                    tweet_sentiment(clean_text(json_object["text"]))))
+```
+
+Actions were performed on the text using python functions, to clean the text formatting, determine
+coordinates if no exact were given and to determine the sentiment and polarity. In order to reuse the same data to continually refresh the analysis, the dataframes were retained in persistent memory and disk:
 
 
+```python
+tweets.persist(StorageLevel.MEMORY_AND_DISK)
+```
+A similar process was used to collect and persistently store the exact coordinate data as a dataframe:
 
 
+```python
+tweets_coordiates = kafkaStreamCoords. \
+        map(lambda (key, value): json.loads(value)). \
+        map(lambda json_object: (json_object["user"]["screen_name"],
+			json_object["coordinates"]["coordinates"],
+			clean_text(json_object["text"]),tweet_sentiment(clean_text(json_object["text"]))))
+        
+tweets_coordiates.pprint(10)
+tweets_coordiates.persist(StorageLevel.MEMORY_AND_DISK)
+```
 
+##### Data Processing, Apache Spark Analytics
+
+###### Running Totals Data
+
+The tweets dataframe was used to generate a continued ordered count of hashtag
+topics and tagged users in the text field of the tweets:
+
+```python
+'''
+  From the tweets data stream, extract the hashtags from the text.
+  Maintain a running count over 24 hours of the most used hashtags.
+  Replicate the 'trending' function of twitter to show the top 10 talked about
+  topics in London.
+'''
+# keep the username and tweet text
+# split the text of the tweet into a list of words
+# keep the words marked with the twitter topic hashtag #
+# map - assign count of 1 to each hashtag
+# maintain a running total and continue for 24 hours, show results at intervals of 2 seconds
+# ensure stream is running without issue
+# sort in descing order by running total, the first x rows will now indicate the most popular #
+trending = tweets. \
+  map(lambda (username, coordinates, tweet_text, sentiment_level): (username, tweet_text)). \
+  flatMapValues(lambda tweet_text: tweet_text.split(" ")). \
+  filter(lambda (pair, word): len(word) > 1 and word[0] == '#'). \
+  map(lambda (username, hashtag): (hashtag, 1)). \
+  reduceByKeyAndWindow(lambda a, b: a+b, None, 60*60*24, 2). \
+  transform(lambda rdd: rdd.sortBy(lambda a: -a[-1]))
+```
+The tweets dataframe was transformed into continually updating micro RDDs. The text was split into
+its constituent words, words indicating @users or hashtags # (as in the above code example) were
+retained, and a running total maintained. A window of 24 hours is also given with an interval of two
+seconds, refreshing the data continuously for a one day period. I then used PySpark pprint() functions to view the running totals being successfully populated when the code is run through Spark:
+
+```python
+trending.pprint(10) # print the current top ten hashtags to the console
+```
+The top ten from each of the two running totals could then be viewed through the terminal to monitor
+the data being produced as expected:
+
+<img src="images/spark_console.png?raw=true"/>
 
 
 
